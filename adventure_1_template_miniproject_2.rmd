@@ -9,10 +9,107 @@ output:
 ---
 
 
+```{r}
+library(stringr)
+library(dplyr)
+library(janeaustenr)
+library(ngram)
+library(stringr) #for regex
+library(tidyverse)
+library(tidytext)
+library(glue)
+```
 
+
+```{r}
+length(raw$source[96])
+```
+
+
+```{r}
+
+```
+
+
+
+
+
+
+```{r}
+str1 = c("", "x", "x y", "x y!" , "x y! z")
+lengths(strsplit(str1, "\\W+"))
+```
+
+
+
+```{r}
+#raw <- read.csv("https://www.macalester.edu/~ajohns24/data/buzzfeed.csv")
+
+raw <- read.csv("https://www.macalester.edu/~ajohns24/data/buzzfeed.csv", header = T, na.strings = c("", " ", NA))
+
+```
+
+
+
+
+```{r}
+TitleNumOfExc <- str_count(raw$title, "!")
+TitleNumOfQue <- str_count(raw$title, "\\?")
+TitleNumOfCap <- str_count(raw$title, "\\b[A-Z]{2,}\\b")
+TextNumOfQuotation <- str_count(raw$text, "\"")
+
+TitleLength <- str_count(raw$title, "\\W+")
+TextLength <- str_count(raw$text, "\\W+")
+```
+
+```{r}
+newsTemp <- raw %>% 
+  mutate(TitleNumOfExc) %>% 
+  mutate(TitleNumOfQue) %>% 
+  mutate(TitleNumOfCap) %>% 
+  mutate(TextNumOfQuotation) %>% 
+  mutate(TitleLength) %>% 
+  mutate(TextLength)
+```
+
+
+```{r}
+temp <- tibble(txt = newsTemp$text) %>% 
+  mutate(txt = as.character(txt))
+
+
+tokens <- temp %>%
+  mutate(linenumber = row_number()) %>%
+  unnest_tokens(word, txt)
+
+# get the sentiment from the first text: 
+tokens <- tokens %>%
+  group_by(linenumber) %>%
+  inner_join(get_sentiments("nrc")) %>% # pull out only sentiment words
+  count(sentiment) %>% # count the # of positive & negative words
+  spread(sentiment, n, fill = 0) # %>% # made data wide rather than narrow
+```
 
 \
 \
+
+
+
+```{r}
+newsTemp <- cbind(data.frame(newsTemp),data.frame(tokens))
+newsTemp
+```
+
+
+```{r}
+newsData <- newsTemp %>% 
+  select(-title, -text, -url, -linenumber, -authors)
+
+newsData
+```
+
+
+
 
 
 
@@ -29,6 +126,11 @@ output:
 
 
 ## Part 2: Analyze
+
+
+
+
+
 
 
 \
