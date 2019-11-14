@@ -32,14 +32,7 @@ RNGversion("3.6.1")
 
 
 
-
-
-```{r}
-str1 = c("", "x", "x y", "x y!" , "x y! z")
-lengths(strsplit(str1, "\\W+"))
-```
-
-
+### Check the Data
 
 ```{r}
 #raw <- read.csv("https://www.macalester.edu/~ajohns24/data/buzzfeed.csv")
@@ -47,6 +40,31 @@ lengths(strsplit(str1, "\\W+"))
 raw <- read.csv("https://www.macalester.edu/~ajohns24/data/buzzfeed.csv", header = T, na.strings = c("", " ", NA))
 
 ```
+
+```{r}
+do.call(rbind, lapply(levels(raw$source), FUN = function(x){
+   tt <- subset(raw, source == x)
+   
+   result <- table(tt$type)
+   result$source <- x
+   
+   return (result)
+ }))
+```
+
+```{r}
+do.call(rbind, lapply(levels(raw$authors), FUN = function(x){
+   tt <- subset(raw, authors == x)
+   
+   result <- table(tt$type)
+   result$authors <- x
+   
+   return (result)
+ }))
+```
+
+
+
 
 
 
@@ -98,6 +116,21 @@ tokens <- tokens %>%
 newsTemp <- cbind(data.frame(newsTemp),data.frame(tokens))
 newsTemp
 ```
+
+```{r}
+newsTemp <- newsTemp %>% 
+  mutate(anger = anger/TextLength)  %>% 
+  mutate(anticipation = anticipation/TextLength)  %>% 
+  mutate(disgust = disgust/TextLength)  %>% 
+  mutate(fear = fear/TextLength)  %>% 
+  mutate(joy = joy/TextLength) %>% 
+  mutate(negative = negative/TextLength) %>% 
+  mutate(positive = positive/TextLength) %>% 
+  mutate(sadness = sadness/TextLength) %>% 
+  mutate(surprise = surprise/TextLength) %>% 
+  mutate(trust = trust/TextLength)
+```
+
 
 
 ```{r}
@@ -307,12 +340,12 @@ variable_importance <- data.frame(importance(forest_model$finalModel)) %>%
 # Arrange predictors by importance (most to least)
 variable_importance %>% 
   arrange(desc(MeanDecreaseGini)) %>% 
-  head(3)
+  head(6)
 
 # Arrange predictors by importance (least to most)
 variable_importance %>% 
   arrange(MeanDecreaseGini) %>% 
-  head(3)
+  head(6)
 ```
 
 
