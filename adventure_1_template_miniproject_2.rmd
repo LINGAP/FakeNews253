@@ -18,15 +18,14 @@ library(stringr) #for regex
 library(tidyverse)
 library(tidytext)
 library(glue)
-```
+library(ggplot2)
+library(caret)
 
-
-```{r}
-length(raw$source[96])
-```
-
-
-```{r}
+library(randomForest)
+library(gridExtra)
+library(rpart)  
+library(infer) 
+RNGversion("3.6.1")
 
 ```
 
@@ -129,7 +128,192 @@ newsData
 
 
 
+### Logistic 
 
+```{r}
+# Set the seed
+set.seed(253)
+
+# Run the model
+logistic_model <- train(
+    type ~ .,
+    data = newsData,
+    method = "glm",
+    family = "binomial",
+    trControl = trainControl(method = "cv", number = 5),
+    metric = "Accuracy",
+    na.action = na.omit
+)
+
+```
+
+```{r}
+summary(logistic_model)
+```
+
+
+
+CV accuracy:
+
+```{r}
+logistic_model$results
+```
+
+
+```{r}
+# We can only make predictions for cases with information on the predictor
+predict_data <- na.omit(logistic_model$trainingData)
+
+# CLASSIFY each case in the sydney data set (using a 0.5 probability threshold)
+classifications <- predict(logistic_model, newdata = predict_data, type = "raw")
+
+# Construct a confusion matrix
+confusionMatrix(data = classifications, 
+  reference = predict_data$.outcome, 
+  positive = "real")
+```
+
+
+
+
+### KNN
+
+```{r}
+#KNN
+set.seed(253)
+
+newsData_Sub <- newsData %>%
+  select(-source)
+
+knn_model <- train(
+  type ~.,
+  data = newsData_Sub,
+  preProcess = c("center","scale"),
+  method = "knn",
+  tuneGrid = data.frame(k = c(seq(1, 182, by = 10), 182)),
+  trControl = trainControl(method = "cv", number = 10, selectionFunction = "best"),
+  metric = "Accuracy",
+  na.action = na.omit
+)
+```
+
+```{r}
+plot(knn_model)
+```
+
+```{r}
+knn_model$bestTune
+```
+
+
+
+```{r}
+mean(knn_model_fakeNews$resample$Accuracy)
+```
+
+
+```{r}
+# We can only make predictions for cases with information on the predictor
+predict_data <- na.omit(knn_model$trainingData)
+
+# CLASSIFY each case in the sydney data set (using a 0.5 probability threshold)
+classifications <- predict(knn_model, newdata = predict_data, type = "raw")
+
+# Construct a confusion matrix
+confusionMatrix(data = classifications, 
+  reference = predict_data$.outcome, 
+  positive = "real")
+```
+
+
+### Classification Tree
+
+```{r}
+set.seed(253)
+# Construct trees
+tree_model <- train(
+  type ~ .,
+  data = newsData,
+  method = "rpart",
+  tuneGrid = data.frame(cp = seq(0,0.5,length=70)),
+  trControl = trainControl(method = "cv", number = 10, selectionFunction = "oneSE"),
+  metric = "Accuracy",
+  na.action = na.omit
+)
+```
+
+```{r}
+plot(tree_model)
+tree_model$bestTune
+```
+
+
+```{r}
+tree_model$results
+mean(tree_model$resample$Accuracy)
+```
+
+```{r}
+# Plot the tree
+library(rpart.plot)
+rpart.plot(tree_model$finalModel)
+
+# Get metrics of variable importance
+tree_model$finalModel$variable.importance
+```
+
+
+
+
+### Random Forest
+
+```{r}
+set.seed(253)
+
+forest_model <- train(
+  type ~ .,
+  data = newsData,
+  method = "rf",
+  tuneGrid = data.frame(mtry = c(2,4,8,16)),
+  trControl = trainControl(method = "oob"),
+  metric = "Accuracy",
+  na.action = na.omit
+)
+```
+
+```{r}
+plot(forest_model)
+
+```
+
+
+```{r}
+forest_model$finalModel
+```
+
+
+
+```{r}
+forest_model$results %>% 
+    filter(mtry == forest_model$bestTune$mtry)
+```
+
+
+
+```{r}
+variable_importance <- data.frame(importance(forest_model$finalModel)) %>% 
+  mutate(predictor = rownames(.))
+
+# Arrange predictors by importance (most to least)
+variable_importance %>% 
+  arrange(desc(MeanDecreaseGini)) %>% 
+  head(3)
+
+# Arrange predictors by importance (least to most)
+variable_importance %>% 
+  arrange(MeanDecreaseGini) %>% 
+  head(3)
+```
 
 
 
