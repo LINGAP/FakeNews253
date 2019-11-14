@@ -41,7 +41,7 @@ raw <- read.csv("https://www.macalester.edu/~ajohns24/data/buzzfeed.csv", header
 
 ```
 
-```{r}
+```{r warning = FALSE}
 do.call(rbind, lapply(levels(raw$source), FUN = function(x){
    tt <- subset(raw, source == x)
    
@@ -52,7 +52,7 @@ do.call(rbind, lapply(levels(raw$source), FUN = function(x){
  }))
 ```
 
-```{r}
+```{r warning = FALSE}
 do.call(rbind, lapply(levels(raw$authors), FUN = function(x){
    tt <- subset(raw, authors == x)
    
@@ -160,7 +160,7 @@ newsData <- newsTemp %>%
 
 ### Logistic 
 
-```{r}
+```{r warning = FALSE}
 # Set the seed
 set.seed(253)
 
@@ -191,6 +191,8 @@ logistic_model$results
 
 
 ```{r}
+set.seed(253)
+
 # We can only make predictions for cases with information on the predictor
 predict_data <- na.omit(logistic_model$trainingData)
 
@@ -208,20 +210,17 @@ confusionMatrix(data = classifications,
 
 ### KNN
 
-```{r}
+```{r warning = FALSE}
 #KNN
 set.seed(253)
 
-newsData_Sub <- newsData %>%
-  select(-source)
-
 knn_model <- train(
   type ~.,
-  data = newsData_Sub,
+  data = newsData,
   preProcess = c("center","scale"),
   method = "knn",
   tuneGrid = data.frame(k = c(seq(1, 182, by = 10), 182)),
-  trControl = trainControl(method = "cv", number = 10, selectionFunction = "best"),
+  trControl = trainControl(method = "cv", number = 5, selectionFunction = "best"),
   metric = "Accuracy",
   na.action = na.omit
 )
@@ -243,6 +242,8 @@ mean(knn_model$resample$Accuracy)
 
 
 ```{r}
+set.seed(253)
+
 # We can only make predictions for cases with information on the predictor
 predict_data <- na.omit(knn_model$trainingData)
 
@@ -278,6 +279,8 @@ tree_model$bestTune
 ```
 
 ```{r}
+set.seed(253)
+
 # We can only make predictions for cases with information on the predictor
 predict_data <- na.omit(tree_model$trainingData)
 
@@ -364,14 +367,25 @@ variable_importance %>%
   arrange(MeanDecreaseGini) %>% 
   head(6)
 ```
+  
+  
+  
+  
+  
+  
+  
+
+
+
 
 
     Model              in-sample Accuracy       5-fold CV / oob
     ---------------- -----------------------  ------------------
     `logistic_model`       0.9253                0.8158
-    `knn`                  0.6703                0.6972
+    `knn`                    ?                      ?
     `tree_model`           0.8103                0.7807
     `forest_model`         0.7816                0.8046
+
 
 
 \
@@ -384,7 +398,6 @@ variable_importance %>%
 
 
 ## Part 3: Summarize
-
 
 
 
@@ -416,7 +429,7 @@ newsData2 <- newsData %>%
 
 #### Logistic 
 
-```{r}
+```{r warning=FALSE}
 # Set the seed
 set.seed(253)
 
@@ -447,11 +460,13 @@ logistic_model_2$results
 
 
 ```{r}
+set.seed(253)
+
 # We can only make predictions for cases with information on the predictor
-predict_data <- na.omit(logistic_model$trainingData)
+predict_data <- na.omit(logistic_model_2$trainingData)
 
 # CLASSIFY each case in the sydney data set (using a 0.5 probability threshold)
-classifications <- predict(logistic_model, newdata = predict_data, type = "raw")
+classifications <- predict(logistic_model_2, newdata = predict_data, type = "raw")
 
 # Construct a confusion matrix
 confusionMatrix(data = classifications, 
@@ -462,6 +477,358 @@ confusionMatrix(data = classifications,
 
 
 
+### KNN
+
+```{r warning = FALSE}
+#KNN
+set.seed(253)
+
+knn_model_2 <- train(
+  type ~.,
+  data = newsData2,
+  preProcess = c("center","scale"),
+  method = "knn",
+  tuneGrid = data.frame(k = c(seq(1, 182, by = 10), 182)),
+  trControl = trainControl(method = "cv", number = 5, selectionFunction = "best"),
+  metric = "Accuracy",
+  na.action = na.omit
+)
+```
+
+```{r}
+plot(knn_model_2)
+```
+
+```{r}
+knn_model_2$bestTune
+```
 
 
+
+```{r}
+mean(knn_model_2$resample$Accuracy)
+```
+
+
+```{r}
+set.seed(253)
+
+# We can only make predictions for cases with information on the predictor
+predict_data <- na.omit(knn_model_2$trainingData)
+
+# CLASSIFY each case in the sydney data set (using a 0.5 probability threshold)
+classifications <- predict(knn_model_2, newdata = predict_data, type = "raw")
+
+# Construct a confusion matrix
+confusionMatrix(data = classifications, 
+  reference = predict_data$.outcome, 
+  positive = "real")
+```
+
+
+
+
+### Classification Tree
+
+```{r}
+set.seed(253)
+# Construct trees
+tree_model_2 <- train(
+  type ~ .,
+  data = newsData2,
+  method = "rpart",
+  tuneGrid = data.frame(cp = seq(0,0.5,length=70)),
+  trControl = trainControl(method = "cv", number = 5, selectionFunction = "oneSE"),
+  metric = "Accuracy",
+  na.action = na.omit
+)
+```
+
+```{r}
+plot(tree_model_2)
+tree_model_2$bestTune
+```
+
+```{r}
+set.seed(253)
+
+# We can only make predictions for cases with information on the predictor
+predict_data <- na.omit(tree_model_2$trainingData)
+
+# CLASSIFY each case in the sydney data set (using a 0.5 probability threshold)
+classifications <- predict(tree_model_2, newdata = predict_data, type = "raw")
+
+# Construct a confusion matrix
+confusionMatrix(data = classifications, 
+  reference = predict_data$.outcome, 
+  positive = "real")
+```
+
+
+```{r}
+mean(tree_model_2$resample$Accuracy)
+```
+
+```{r}
+# Plot the tree
+library(rpart.plot)
+rpart.plot(tree_model_2$finalModel)
+
+# Get metrics of variable importance
+tree_model_2$finalModel$variable.importance
+```
+
+
+
+
+
+### Random Forest
+
+```{r}
+set.seed(253)
+
+forest_model_2 <- train(
+  type ~ .,
+  data = newsData2,
+  method = "rf",
+  tuneGrid = data.frame(mtry = c(2,4, 8, 16)),
+  trControl = trainControl(method = "oob"),
+  metric = "Accuracy",
+  na.action = na.omit
+)
+```
+
+```{r}
+plot(forest_model_2)
+```
+
+
+```{r}
+forest_model_2$finalModel
+```
+
+```{r}
+(70+61)/(70+21+30+61)
+```
+
+
+
+```{r}
+forest_model_2$results
+```
+
+
+```{r}
+forest_model_2$results %>% 
+    filter(mtry == forest_model_2$bestTune$mtry)
+```
+
+
+
+```{r}
+variable_importance <- data.frame(importance(forest_model_2$finalModel)) %>% 
+  mutate(predictor = rownames(.))
+
+# Arrange predictors by importance (most to least)
+variable_importance %>% 
+  arrange(desc(MeanDecreaseGini)) %>% 
+  head(6)
+
+# Arrange predictors by importance (least to most)
+variable_importance %>% 
+  arrange(MeanDecreaseGini) %>% 
+  head(6)
+```
+
+
+
+    Model                    in-sample Accuracy       5-fold CV / oob
+    --------------------  -----------------------  ------------------
+    `logistic_model_2`            0.7582                0.7249
+    `knn_model_2`                 0.6758                0.6972
+    `tree_model_2`                0.7308                0.7141
+    `forest_model_2`              0.7198                0.7198
+    
+    
+    
+    
+### Rebuild Logistic and KNN: Less Variables
+
+
+#### Logistic 
+
+```{r warning=FALSE}
+# Set the seed
+set.seed(253)
+
+# Run the model
+logistic_model_3 <- train(
+    type ~ TextNumOfQuotation + TitleLength + disgust + surprise + positive + TextLength ,
+    data = newsData2,
+    method = "glm",
+    family = "binomial",
+    trControl = trainControl(method = "cv", number = 5),
+    metric = "Accuracy",
+    na.action = na.omit
+)
+
+```
+
+```{r}
+summary(logistic_model_3)
+```
+
+
+
+CV accuracy:
+
+```{r}
+logistic_model_3$results
+```
+
+
+```{r}
+set.seed(253)
+
+# We can only make predictions for cases with information on the predictor
+predict_data <- na.omit(logistic_model_3$trainingData)
+
+# CLASSIFY each case in the sydney data set (using a 0.5 probability threshold)
+classifications <- predict(logistic_model_3, newdata = predict_data, type = "raw")
+
+# Construct a confusion matrix
+confusionMatrix(data = classifications, 
+  reference = predict_data$.outcome, 
+  positive = "real")
+```
+
+
+
+
+### KNN
+
+```{r warning = FALSE}
+#KNN
+set.seed(253)
+
+knn_model_3 <- train(
+  type ~ TextNumOfQuotation + TitleLength + disgust + surprise + positive + TextLength,
+  data = newsData2,
+  preProcess = c("center","scale"),
+  method = "knn",
+  tuneGrid = data.frame(k = c(seq(1, 182, by = 10), 182)),
+  trControl = trainControl(method = "cv", number = 5, selectionFunction = "best"),
+  metric = "Accuracy",
+  na.action = na.omit
+)
+```
+
+```{r}
+plot(knn_model_3)
+```
+
+```{r}
+knn_model_3$bestTune
+```
+
+
+
+```{r}
+mean(knn_model_3$resample$Accuracy)
+```
+
+
+```{r}
+set.seed(253)
+
+# We can only make predictions for cases with information on the predictor
+predict_data <- na.omit(knn_model_3$trainingData)
+
+# CLASSIFY each case in the sydney data set (using a 0.5 probability threshold)
+classifications <- predict(knn_model_3, newdata = predict_data, type = "raw")
+
+# Construct a confusion matrix
+confusionMatrix(data = classifications, 
+  reference = predict_data$.outcome, 
+  positive = "real")
+```    
+
+    
+
+### KNN
+
+```{r warning = FALSE}
+#KNN
+set.seed(253)
+
+knn_model_4 <- train(
+  type ~ TextNumOfQuotation + TitleLength,
+  data = newsData2,
+  preProcess = c("center","scale"),
+  method = "knn",
+  tuneGrid = data.frame(k = c(seq(1, 182, by = 10), 182)),
+  trControl = trainControl(method = "cv", number = 5, selectionFunction = "best"),
+  metric = "Accuracy",
+  na.action = na.omit
+)
+```
+
+```{r}
+plot(knn_model_4)
+```
+
+```{r}
+knn_model_4$bestTune
+```
+
+
+
+```{r}
+mean(knn_model_4$resample$Accuracy)
+```
+
+
+```{r}
+set.seed(253)
+
+# We can only make predictions for cases with information on the predictor
+predict_data <- na.omit(knn_model_4$trainingData)
+
+# CLASSIFY each case in the sydney data set (using a 0.5 probability threshold)
+classifications <- predict(knn_model_4, newdata = predict_data, type = "raw")
+
+# Construct a confusion matrix
+confusionMatrix(data = classifications, 
+  reference = predict_data$.outcome, 
+  positive = "real")
+```   
+  
+    
+
+    Model                    in-sample Accuracy       5-fold CV 
+    --------------------  -----------------------  ------------------
+    `logistic_model_3`            0.7553                0.6922
+    `knn_model_3`                 0.6868                0.7143
+    `knn_model_4`                 0.7363                0.6866
+
+    
+    
+    
+Summary:
+
+
+    
+      Model                   in-sample Accuracy     5-fold CV / oob
+    --------------------  -----------------------  ------------------
+    `logistic_model`              0.9253                0.8158
+    `knn`                             ?                   ?
+    `tree_model`                  0.8103                0.7807
+    `forest_model`                0.7816                0.8046
+    `logistic_model_2`            0.7582                0.7249
+    `knn_model_2`                 0.6758                0.6972
+    `tree_model_2`                0.7308                0.7141
+    `forest_model_2`              0.7198                0.7198
+    `logistic_model_3`            0.7553                0.6922
+    `knn_model_3`                 0.6868                0.7143
+    `knn_model_4`                 0.7363                0.6866
 
