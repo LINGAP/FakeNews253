@@ -114,7 +114,6 @@ tokens <- tokens %>%
 
 ```{r}
 newsTemp <- cbind(data.frame(newsTemp),data.frame(tokens))
-newsTemp
 ```
 
 ```{r}
@@ -136,8 +135,6 @@ newsTemp <- newsTemp %>%
 ```{r}
 newsData <- newsTemp %>% 
   select(-title, -text, -url, -linenumber, -authors)
-
-newsData
 ```
 
 
@@ -241,7 +238,7 @@ knn_model$bestTune
 
 
 ```{r}
-mean(knn_model_fakeNews$resample$Accuracy)
+mean(knn_model$resample$Accuracy)
 ```
 
 
@@ -280,9 +277,21 @@ plot(tree_model)
 tree_model$bestTune
 ```
 
+```{r}
+# We can only make predictions for cases with information on the predictor
+predict_data <- na.omit(tree_model$trainingData)
+
+# CLASSIFY each case in the sydney data set (using a 0.5 probability threshold)
+classifications <- predict(tree_model, newdata = predict_data, type = "raw")
+
+# Construct a confusion matrix
+confusionMatrix(data = classifications, 
+  reference = predict_data$.outcome, 
+  positive = "real")
+```
+
 
 ```{r}
-tree_model$results
 mean(tree_model$resample$Accuracy)
 ```
 
@@ -307,7 +316,7 @@ forest_model <- train(
   type ~ .,
   data = newsData,
   method = "rf",
-  tuneGrid = data.frame(mtry = c(2,4,8,16)),
+  tuneGrid = data.frame(mtry = c(2,4, 6, 7, 16, 21, 22,30,35,43)),
   trControl = trainControl(method = "oob"),
   metric = "Accuracy",
   na.action = na.omit
@@ -316,7 +325,6 @@ forest_model <- train(
 
 ```{r}
 plot(forest_model)
-
 ```
 
 
@@ -324,6 +332,15 @@ plot(forest_model)
 forest_model$finalModel
 ```
 
+```{r}
+(71+65)/(71+12+26+65)
+```
+
+
+
+```{r}
+forest_model$results
+```
 
 
 ```{r}
@@ -348,6 +365,13 @@ variable_importance %>%
   head(6)
 ```
 
+
+    Model              in-sample Accuracy       5-fold CV / oob
+    ---------------- -----------------------  ------------------
+    `logistic_model`       0.9253                0.8158
+    `knn`                  0.6703                0.6972
+    `tree_model`           0.8103                0.7807
+    `forest_model`         0.7816                0.8046
 
 
 \
@@ -374,6 +398,70 @@ variable_importance %>%
 
 
 ## Part 4: Contributions
+
+
+
+
+
+
+
+
+### Delete `Source`
+
+```{r}
+newsData2 <- newsData %>% 
+  select(-source)
+```
+
+
+#### Logistic 
+
+```{r}
+# Set the seed
+set.seed(253)
+
+# Run the model
+logistic_model_2 <- train(
+    type ~ .,
+    data = newsData2,
+    method = "glm",
+    family = "binomial",
+    trControl = trainControl(method = "cv", number = 5),
+    metric = "Accuracy",
+    na.action = na.omit
+)
+
+```
+
+```{r}
+summary(logistic_model_2)
+```
+
+
+
+CV accuracy:
+
+```{r}
+logistic_model_2$results
+```
+
+
+```{r}
+# We can only make predictions for cases with information on the predictor
+predict_data <- na.omit(logistic_model$trainingData)
+
+# CLASSIFY each case in the sydney data set (using a 0.5 probability threshold)
+classifications <- predict(logistic_model, newdata = predict_data, type = "raw")
+
+# Construct a confusion matrix
+confusionMatrix(data = classifications, 
+  reference = predict_data$.outcome, 
+  positive = "real")
+```
+
+
+
+
 
 
 
