@@ -64,10 +64,9 @@ do.call(rbind, lapply(levels(raw$authors), FUN = function(x){
 ```
 
 
+## Part 1: Process the data
 
-
-
-
+We summarized the following predictors to describe our data set: # of ! in title, # of ? in title, # of Upper class Words in title, # of quotation marks in text, the length of title, and the length of text.
 
 ```{r}
 TitleNumOfExc <- str_count(raw$title, "!")
@@ -88,6 +87,7 @@ newsTemp <- raw %>%
   mutate(TitleLength) %>% 
   mutate(TextLength)
 ```
+
 
 
 ```{r}
@@ -135,28 +135,14 @@ newsTemp <- newsTemp %>%
 ```{r}
 newsData <- newsTemp %>% 
   select(-title, -text, -url, -linenumber, -authors)
+colnames(newsData)
 ```
-
-
-
-
-
-
-## Part 1: Process the data
-
-
-\
-\
-\
-\
-\
-\
-
 
 
 ## Part 2: Analyze
 
-
+We depends on 4 algorithms: Logistic regression, KNN, Tree, Forest.
+We first use all 17 available predictors on these models.
 
 ### Logistic 
 
@@ -209,6 +195,7 @@ confusionMatrix(data = classifications,
 
 
 ### KNN
+
 
 ```{r warning = FALSE}
 #KNN
@@ -412,10 +399,7 @@ variable_importance %>%
 
 ## Part 4: Contributions
 
-
-
-
-
+It's sensible that all articles from CNN website are real news. Therefore, 'Source' as a predictor is kind of cheating and also becomes a limiation for news that are from unknown sources. Therefore, we delete 'Source' and run the 4 algorithms again to see how would the prediction result change. 
 
 
 
@@ -654,6 +638,7 @@ variable_importance %>%
     
 ### Rebuild Logistic and KNN: Less Variables
 
+For Logistic and KNN, we decide to rerun them with selected predictors, which are the most important predictors identified by the Forest.
 
 #### Logistic 
 
@@ -832,3 +817,61 @@ Summary:
     `knn_model_3`                 0.6868                0.7143
     `knn_model_4`                 0.7363                0.6866
 
+
+Highlight the predictors which are most and least useful in classifying news;
+
+Enhance your discussion with visualizations.
+
+Comparing the accuracy of the first 4 models with the second camp where 'Source' is not used, the accuracy drasctially drops from (0.78 - 0.92) to (0.68-0.76). After using selected predictors on logistic and knn(without 'Source'), we have a range of (0.69 - 0.76).
+
+### The most important predictors
+
+       MeanDecreaseGini  Most Important predictors    belongs to Source'
+    -------------------  -----------------------     ------------------
+	  `20.344026`          	`TextNumOfQuotation`		
+	  `12.490735`	        `sourcehttp://politi.co`		    `*`
+	  `5.098904`	          `surprise`		
+	  `3.897069`	            `joy`		
+	  `3.840938`           	`disgust`		
+	  `3.657723`         	`sourcehttp://cnn.it`            `*`  
+    `7.012116`	           `TitleLength`
+	  `6.029909`           	`positive`	
+   	`5.833852`	          `TextLength`
+   	
+Among those, `TextNumOfQuotation`, `surprise`,and `disgust`	are identified as the most important predictors both in 'Source' forest model and the 'Non-Source' forst model. Therefore, we visualize the relationship between them and the response y(type in this case).
+
+####TextNumOfQuotation
+
+```{r}
+ggplot(newsData, aes(x = TextNumOfQuotation,fill=type)) + 
+  geom_density(alpha=0.5) 
+```
+real news tend to have large number(0 - 50) of quotations in text, while the number of quotation marks in fake news range from (0 -10) and the most of the fake news have 0 quotations. 
+
+####surprise
+
+```{r}
+ggplot(newsData, aes(x = surprise,fill=type)) + 
+  geom_density(alpha=0.5) 
+```
+In general, real news appear to have a normal distribution of (the percentage of) words associated with 'suprise', while fake news tend to have less 'suprise' words. As the density of the two are largely overlaped, it appears that 'surprise' is a much weaker predictor.
+
+####disgust
+
+```{r}
+ggplot(newsData, aes(x = disgust,fill=type)) + 
+  geom_density(alpha=0.5) 
+```
+We observe that fake news have a larger portion of text that are associated with 'disgust' than real news do, while real news is twice more likely to have no 'disgust' words than fake news do.
+
+### The least important predictors
+
+       MeanIncreaseGini  Most Important predictors    belongs to 'Source'
+    -------------------  -----------------------     ------------------
+        0.3159949         	TitleNumOfQue		
+        3.6013215         	TitleNumOfExc		
+        4.2843891	            anger		
+        4.5685442	            fear		
+        4.7367663	          TitleNumOfCap		
+        4.8588023	          anticipation
+                              a lot of source links         *
