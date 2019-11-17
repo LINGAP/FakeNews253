@@ -9,7 +9,7 @@ output:
 ---
 
 
-```{r}
+```{r warning=FALSE}
 library(stringr)
 library(dplyr)
 library(janeaustenr)
@@ -20,66 +20,121 @@ library(tidytext)
 library(glue)
 library(ggplot2)
 library(caret)
-
 library(randomForest)
 library(gridExtra)
 library(rpart)  
 library(infer) 
 RNGversion("3.6.1")
-
 ```
 
 
-
-
-### Check the Data
+## Part 0: Check the Data
 
 ```{r}
-#raw <- read.csv("https://www.macalester.edu/~ajohns24/data/buzzfeed.csv")
-
-raw <- read.csv("https://www.macalester.edu/~ajohns24/data/buzzfeed.csv", header = T, na.strings = c("", " ", NA))
-
+#Input the raw data
+raw0 <- read.csv("https://www.macalester.edu/~ajohns24/data/buzzfeed.csv")
 ```
 
-```{r warning = FALSE}
+We first imported the original dataset, but found that there are many empty blanks. Therefore, we tried to fill them with N/A at firt, as that can be much more convenient to furthur process the data.
+
+```{r}
+#Input the raw data and fill the blanks with N/A
+raw <- read.csv("https://www.macalester.edu/~ajohns24/data/buzzfeed.csv", header = T, na.strings = c("", " ", NA))
+```
+
+### General Information:
+
+```{r}
+dim(raw)
+```
+
+
+```{r}
+colnames(raw)
+```
+
+```{r}
+table(raw$type)
+```
+
+```{r}
+sum(is.na(raw$title))
+```
+
+```{r}
+sum(is.na(raw$text))
+```
+
+```{r}
+sum(is.na(raw$url))
+```
+
+```{r}
+sum(is.na(raw$authors))
+```
+
+```{r}
+sum(is.na(raw$source))
+```
+
+After checking some basic and general information, we found that this is not a quite large dataset. There are only 182 rows with 6 features: `title`, `text`, `url`, `authors`, `source`, `type`. And as we are trying to predict the authenticity of a given news, `type` is the label y here. Among these data, 91 of the news are `real`, whereas the other 91 are `fake`. The distribution is quite even here, which can be very helpful for further analysis. Also, we found that `url` and `source` both have 8 N/A cells, but the feature `authors` does have much information loss (41). For a small dataset of only 182 data, 41 can be a large proportion. To better decide how should we deal with them, we would like to get more details. 
+
+### More details about `source` and `authors`
+
+```{r warning=FALSE}
+#Check the relationship between source and whether or not the news is real
 do.call(rbind, lapply(levels(raw$source), FUN = function(x){
    tt <- subset(raw, source == x)
-   
    result <- table(tt$type)
    result$source <- x
-   
    return (result)
  }))
 ```
+Based on the table above, we can see that around 2/3 of the sources are generaling either real news or fake news, meaning that checking the source of the news is useful to identify the fake news. However, this variable is quite **CHEATING** in the classification process because news from authoritative media/website are usually real. As a result, we will compare the classifications with and without `source` later. 
 
-```{r warning = FALSE}
+```{r warning=FALSE}
+#Check the relationship between author and whether or not the news is real
 do.call(rbind, lapply(levels(raw$authors), FUN = function(x){
    tt <- subset(raw, authors == x)
-   
    result <- table(tt$type)
    result$authors <- x
-   
    return (result)
  }))
 ```
+Based on the table above, we can see that there are 90 authors and most of them just wrote 1 or 2 news, which means the variable `author` is pretty **unique** among news (most authors just appear once or twice in the whole data set) and is not suitable to serve as a good predictor. In other words, using variable `author` is both **computationally expensive** and **unable to provide sufficiently valuable information**. Considering there are also much missing values in `authors`, we plan to delete this `authors` later.
 
+## Part 1: Process the data
 
+We think that there are many underlying hints in `title` and `text` that indicate whether the news are real. Therefore, most of our predictors will focus on `title` and `text`. 
 
+### Create variables and data set
 
+The codes below are the process we try to quantify `title` and `text`. Brief speaking, for title, we take the length, the number of exclamation marks, question marks, and capitalized words as fake news tend to include clickbait in a title. For text, we choose the length, number of quotations and proportion of sentiment words, because real news are usually longer, with more quotations and fewer sentiment words. Detailed codebook and reasons for choosing can be found below.
 
-
+This is mainly a human learning process. 
 
 ```{r}
+#Create a variable that count the number of exclamation marks
 TitleNumOfExc <- str_count(raw$title, "!")
+
+#Create a variable that count the number of question marks
 TitleNumOfQue <- str_count(raw$title, "\\?")
+
+#Create a variable that count the number of capitalized words
 TitleNumOfCap <- str_count(raw$title, "\\b[A-Z]{2,}\\b")
+
+#Create a variable that count the length of the title
+TitleLength <- str_count(raw$title, "\\W+")
+
+#Create a variable that count the number of quotation marks
 TextNumOfQuotation <- str_count(raw$text, "\"")
 
-TitleLength <- str_count(raw$title, "\\W+")
+#Create a variable that count the length of text
 TextLength <- str_count(raw$text, "\\W+")
 ```
 
 ```{r}
+#Add the variables we create into a new data set
 newsTemp <- raw %>% 
   mutate(TitleNumOfExc) %>% 
   mutate(TitleNumOfQue) %>% 
@@ -87,19 +142,16 @@ newsTemp <- raw %>%
   mutate(TextNumOfQuotation) %>% 
   mutate(TitleLength) %>% 
   mutate(TextLength)
-```
 
-
-```{r}
+#Sentiment dictionary
 temp <- tibble(txt = newsTemp$text) %>% 
   mutate(txt = as.character(txt))
-
 
 tokens <- temp %>%
   mutate(linenumber = row_number()) %>%
   unnest_tokens(word, txt)
 
-# get the sentiment from the first text: 
+#Get the sentiment from the first text: 
 tokens <- tokens %>%
   group_by(linenumber) %>%
   inner_join(get_sentiments("nrc")) %>% # pull out only sentiment words
@@ -107,16 +159,11 @@ tokens <- tokens %>%
   spread(sentiment, n, fill = 0) # %>% # made data wide rather than narrow
 ```
 
-\
-\
-
-
-
 ```{r}
+#Combine two data frame together
 newsTemp <- cbind(data.frame(newsTemp),data.frame(tokens))
-```
 
-```{r}
+#Get the portion of each sentiment among each text
 newsTemp <- newsTemp %>% 
   mutate(anger = anger/TextLength)  %>% 
   mutate(anticipation = anticipation/TextLength)  %>% 
@@ -130,35 +177,109 @@ newsTemp <- newsTemp %>%
   mutate(trust = trust/TextLength)
 ```
 
-
-
 ```{r}
+#create the final dataset `newData` and remove unused variables.
 newsData <- newsTemp %>% 
   select(-title, -text, -url, -linenumber, -authors)
 ```
 
+We removed `title` and `text` because we have already created 16 variables that can analyze and quantify different aspects of titles and texts, and therefore we don't need these two predictors anymore. The reasons that we remove `authors` have been mentioned above. 
+
+By manually examimg the data, we found that `url` is almost the same as `source`, and just provide a more specific website address. Therefore it couldn't provide much information for us and will bring colinearties. `linenumber` is just a temporarily used variable in the sentiment dictionary code, so we need to remove it. 
 
 
+### Code book
+
+Variable name      | Meaning                                     | 
+-------------------|---------------------------------------------|
+TitleNumOfExc      |The number of exclamation mark in the title  |
+TitleNumOfQue      |The number of question mark in the title     |
+TitleNumOfCap      |The number of capitalized words in the title |
+TextNumOfQuotation |The number of quotation mark in the text     |
+TitleLength        |The length of the title                      |
+TextLength         |The length of the text                       |
+anger              |The proportion of anger expressions          |
+anticipation       |The proportion of anticipation expressions   |
+disgust            |The proportion of disgust expressions        |
+fear               |The proportion of fear expressions           |
+joy                |The proportion of joy expressions            |
+negative           |The proportion of negative expressions       |
+positive           |The proportion of positive expressions       |
+sadness            |The proportion of sadness expressions        |
+surprise           |The proportion of surprise expressions       |
+trust              |The proportion of trust expressions          |
 
 
+### Reasons of choosing
 
-## Part 1: Process the data
+`TitleNumOfExc` and `TitleNumOfQue`: the number of exclamation marks and question marks can be important indicators because fake news tend to be more emotional or affecting, meaning that there will be more exclamation marks and question marks in the titles of fake news to attract readers.
+
+`TitleNumOfCap`: the number of capitalized words is an important indicator because fake news usually tends to overemphasize some particular points they make, meaning that there will be more capitalized words in the titles of fake news.
+
+`TextNumOfQuotation`: the number of quotation marks is an important indicator because real news tend to be more rigorous and having more quotations so that the content will be more reliable and verfiable, meaning that there will be fewer quotation marks in the text of fake news.
+
+`TitleLength`: for fake news, the title tends to be longer because fake news tend to have more striking information in the title. 
+
+`TextLength`: for fake news, the text tends to be shorter because there are not many supporting evidence and it is hard for the fake news authors to talk a lot because they are talking about something doesn't exist.
+
+`anger`, `anticipation`, `disgust`, `fear`, `joy`, `negative`, `sadness`, `surprise` and `trust`: fake news tend to be more emotional and less objective, and therefore it might include more sentiment words/expression. 
 
 
-\
-\
-\
-\
-\
-\
+### Check human learning variable selection: real and fake news comparison
 
+```{r}
+#Set the seed
+set.seed(253)
+
+#Create a real news data set
+realNews <- newsData %>%
+  filter(type == "real")
+
+#Create a fake news data set
+fakeData <- newsData %>%
+  filter(type == "fake")
+
+#Pick a random real news
+realNews[runif(1, min = 1, max = 81), ]
+
+#Pick a random fake news 
+fakeData[runif(1, min = 1, max = 81), ]
+```
+
+Comparing a random real news with fake news, we can see that the real news has higher number of quotation mark, shorter title length, shorter text length, lower frequency of anger, anticipation, disgust, negative, positive, surprise, and trust expressions, and higher frequency of fear, joy, and sadness expressions. Some features match our assumption, for example, higher number of quotation mark and shorter title length, while others like higher frequency of fear and sadness expressions don't. This is **because variables within single news might be biased**.
+
+As a result, we summarize the mean of each variables for real news and fake news.
+
+```{r}
+#Summarize the mean of variables of different predictors of real news and fake news
+newsDatagroup <- newsData %>%
+  group_by(type) %>%
+  summarize(mean(TitleNumOfExc), mean(TitleNumOfQue), mean(TitleNumOfCap),mean(TextNumOfQuotation), mean(TitleLength), mean(TextLength), mean(anger), mean(anticipation), mean(disgust), mean(fear), mean(joy), mean(negative), mean(positive), mean(sadness), mean(surprise), mean(trust))
+newsDatagroup
+```
+Based on the table above, we can see that on average, real news have slightly more exclamation mark and less question mark, capitalized words used in the title; real news tend to have shorter title length and longer text length with much more usage of quotation mark. In terms of sentiment words usage, real news have less  anger, anticipation, disgust, negative, sadness, fear, trust words, but more joy, positive, surprise words. 
+
+Most of the data matches our assumption except for the number of exclamation marks in the title, the frequency of `trust` and `surprise` expression.
+
+However, although there are some mismatches, these variables are still useful, at least in **human learning**, in classifying fake news.
+
+### Drawbacks
+
+1. By focusing on each small features of the title or text, we might lose some "**human thinkings**" in the classification process. For example, some news, based on our classification predictors, look like fake news but they are actully real because the underlying information is so striking that the authors need exclamation mark to express this emotion. 
+
+2. Some sentiments we refer to might be overlapping with one another, meaning that the importance of these variables might be **overemphasized**. For example, sad words and negative words might be overlapping, so as joy words and positive words.
+
+3. The amount of data is not big enough so that there might be some **variations** in the data that lead to the **unmatches** of our assumption with the data. Also, the low amount of data wil also lead to  less accurate classification result.
+
+4. Our predictors can only focus on some **particular features** of titles and texts, meaning that we can't check the authenticity based on the more sophisticated **big picture** like themes and purposes of the news.
 
 
 ## Part 2: Analyze
 
+We depends on 4 algorithms: Logistic regression, KNN, Tree, Forest.
+We first use all 17 available predictors on these models.
 
-
-### Logistic 
+### Logistic Model
 
 ```{r warning = FALSE}
 # Set the seed
@@ -209,6 +330,7 @@ confusionMatrix(data = classifications,
 
 
 ### KNN
+
 
 ```{r warning = FALSE}
 #KNN
@@ -370,53 +492,19 @@ variable_importance %>%
 ```
   
   
-  
-  
-  
-  
-  
+
+
+Model           |   in-sample Accuracy   |  5-fold CV / oob
+----------------| -----------------------|------------------
+`logistic_model`|      0.9253            |    0.8158
+`knn_model`     |        1               |    0.7810
+`tree_model`    |      0.8103            |    0.7807
+`forest_model`  |      0.7816            |    0.8046
 
 
 
 
-
-    Model              in-sample Accuracy       5-fold CV / oob
-    ---------------- -----------------------  ------------------
-    `logistic_model`       0.9253                0.8158
-    `knn`                    ?                      ?
-    `tree_model`           0.8103                0.7807
-    `forest_model`         0.7816                0.8046
-
-
-
-\
-\
-\
-\
-\
-\
-
-
-
-## Part 3: Summarize
-
-
-
-\
-\
-\
-\
-\
-\
-
-
-
-## Part 4: Contributions
-
-
-
-
-
+It's sensible that all articles from CNN website are real news. Therefore, `source` as a predictor is kind of cheating and also becomes a limiation for news that are from unknown sources. Therefore, we delete `source` and run the 4 algorithms again to see how would the prediction result change. 
 
 
 
@@ -643,18 +731,22 @@ variable_importance %>%
 
 
 
-    Model                    in-sample Accuracy       5-fold CV / oob
-    --------------------  -----------------------  ------------------
-    `logistic_model_2`            0.7582                0.7249
-    `knn_model_2`                 0.6758                0.6972
-    `tree_model_2`                0.7308                0.7141
-    `forest_model_2`              0.7198                0.7198
+
+Model             |   in-sample Accuracy   |  5-fold CV / oob
+------------------|------------------------|------------------
+`logistic_model_2`|      0.7582            |    0.7249
+`knn_model_2`     |      0.6758            |    0.6972
+`tree_model_2`    |      0.7308            |    0.7141
+`forest_model_2`  |      0.7198            |    0.7198
+
+
     
     
     
     
 ### Rebuild Logistic and KNN: Less Variables
 
+For Logistic and KNN, we decide to rerun them with selected predictors, which are the most important predictors identified by the Forest.
 
 #### Logistic 
 
@@ -804,32 +896,128 @@ confusionMatrix(data = classifications,
   positive = "real")
 ```   
   
-    
-
-    Model                    in-sample Accuracy       5-fold CV 
-    --------------------  -----------------------  ------------------
-    `logistic_model_3`            0.7553                0.6922
-    `knn_model_3`                 0.6868                0.7143
-    `knn_model_4`                 0.7363                0.6866
-
-    
-    
-    
-Summary:
+  
+  
+  
+  
+Model             |   in-sample Accuracy   |  5-fold CV / oob
+------------------|------------------------|------------------
+`logistic_model_3`|      0.7553            |    0.6922
+`knn_model_3`     |      0.6868            |    0.7143
+`knn_model_4`     |      0.7363            |    0.6866
 
 
+
+
     
-      Model                   in-sample Accuracy     5-fold CV / oob
-    --------------------  -----------------------  ------------------
-    `logistic_model`              0.9253                0.8158
-    `knn`                             ?                   ?
-    `tree_model`                  0.8103                0.7807
-    `forest_model`                0.7816                0.8046
-    `logistic_model_2`            0.7582                0.7249
-    `knn_model_2`                 0.6758                0.6972
-    `tree_model_2`                0.7308                0.7141
-    `forest_model_2`              0.7198                0.7198
-    `logistic_model_3`            0.7553                0.6922
-    `knn_model_3`                 0.6868                0.7143
-    `knn_model_4`                 0.7363                0.6866
+ 
+\
+\
+\
+\
+\
+\
+
+
+
+## Part 3: Summarize
+
+
+  
+
+
+Model             |   in-sample Accuracy   |  5-fold CV / oob
+------------------| -----------------------|------------------
+`logistic_model`  |      0.9253            |    0.8158
+`knn_model`       |        1               |    0.7810
+`tree_model`      |      0.8103            |    0.7807
+`forest_model`    |      0.7816            |    0.8046
+`logistic_model_2`|      0.7582            |    0.7249
+`knn_model_2`     |      0.6758            |    0.6972
+`tree_model_2`    |      0.7308            |    0.7141
+`forest_model_2`  |      0.7198            |    0.7198
+`logistic_model_3`|      0.7553            |    0.6922
+`knn_model_3`     |      0.6868            |    0.7143
+`knn_model_4`     |      0.7363            |    0.6866
+
+
+
+Comparing the accuracy of the first 4 models with the second camp where 'Source' is not used, the accuracy drasctially drops from (0.78 - 0.92) to (0.68-0.76). After using selected predictors on logistic and knn(without 'Source'), we have a range of (0.69 - 0.76).
+
+### The most important predictors
+
+MeanDecreaseGini    | Most Important predictors  |  belongs to Source'
+--------------------|----------------------------|-----------------------
+20.344026           |	`TextNumOfQuotation`		   |
+12.490735	          | `sourcehttp://politi.co`	 |    `*`
+5.098904	          | `surprise`		             |
+3.897069	          | `joy`		                   |
+3.840938            | `disgust`		               |
+3.657723            | `sourcehttp://cnn.it`      |    `*`  
+7.012116	          | `TitleLength`              |
+6.029909            | `positive`	               |
+5.833852	          | `TextLength`               |
+   	
+Among those, `TextNumOfQuotation`, `surprise`,and `disgust`	are identified as the most important predictors both in 'Source' forest model and the 'Non-Source' forst model. Therefore, we visualize the relationship between them and the response y(type in this case).
+
+#### TextNumOfQuotation
+
+```{r}
+ggplot(newsData, aes(x = TextNumOfQuotation,fill=type)) + 
+  geom_density(alpha=0.5) 
+```
+
+real news tend to have large number(0 - 50) of quotations in text, while the number of quotation marks in fake news range from (0 -10) and the most of the fake news have 0 quotations. 
+
+####surprise
+
+```{r}
+ggplot(newsData, aes(x = surprise,fill=type)) + 
+  geom_density(alpha=0.5) 
+```
+
+In general, real news appear to have a normal distribution of (the percentage of) words associated with 'suprise', while fake news tend to have less 'suprise' words. As the density of the two are largely overlaped, it appears that 'surprise' is a much weaker predictor.
+
+####disgust
+
+```{r}
+ggplot(newsData, aes(x = disgust,fill=type)) + 
+  geom_density(alpha=0.5) 
+```
+
+We observe that fake news have a larger portion of text that are associated with 'disgust' than real news do, while real news is twice more likely to have no 'disgust' words than fake news do.
+
+### The least important predictors
+
+MeanIncreaseGini   | Most Important predictors | belongs to 'Source'
+-------------------|---------------------------|---------------------
+  0.3159949        | 	TitleNumOfQue		         |
+  3.6013215        |	TitleNumOfExc		         |
+  4.2843891	       |  anger		                 |
+  4.5685442	       |  fear		                 |
+  4.7367663	       |  TitleNumOfCap		         |
+  4.8588023	       |  anticipation             |
+                   |  a lot of source links    |         *
+                              
+                              
+                              
+                              
+                              
+                              
+
+\
+\
+\
+\
+\
+\
+
+
+
+## Part 4: Contributions
+
+
+
+
+
 
