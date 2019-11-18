@@ -922,9 +922,7 @@ Model             |   in-sample Accuracy   |  5-fold CV / oob
 
 ## Part 3: Summarize
 
-
-  
-
+6 most important Identifed by Forest with `Source`
 
 Model             |   in-sample Accuracy   |  5-fold CV / oob
 ------------------| -----------------------|------------------
@@ -940,11 +938,13 @@ Model             |   in-sample Accuracy   |  5-fold CV / oob
 `knn_model_3`     |      0.6868            |    0.7143
 `knn_model_4`     |      0.7363            |    0.6866
 
-
+6 most important Identifed by Forest with `Source`
 
 Comparing the accuracy of the first 4 models with the second camp where 'Source' is not used, the accuracy drasctially drops from (0.78 - 0.92) to (0.68-0.76). After using selected predictors on logistic and knn(without 'Source'), we have a range of (0.69 - 0.76).
 
 ### The most important predictors
+
+6 most important Identifed by Forest with `Source`
 
 MeanDecreaseGini    | Most Important predictors  |  belongs to Source'
 --------------------|----------------------------|-----------------------
@@ -954,11 +954,19 @@ MeanDecreaseGini    | Most Important predictors  |  belongs to Source'
 3.897069	          | `joy`		                   |
 3.840938            | `disgust`		               |
 3.657723            | `sourcehttp://cnn.it`      |    `*`  
-7.012116	          | `TitleLength`              |
-6.029909            | `positive`	               |
-5.833852	          | `TextLength`               |
-   	
-Among those, `TextNumOfQuotation`, `surprise`,and `disgust`	are identified as the most important predictors both in 'Source' forest model and the 'Non-Source' forst model. Therefore, we visualize the relationship between them and the response y(type in this case).
+
+6 most important Identifed by Forest without `Source`
+
+MeanDecreaseGini    | Most Important predictors  |  
+--------------------|----------------------------|
+14.180866           |	`TextNumOfQuotation`		   |
+7.012116            | `TitleLength`	             | 
+6.969306            | `disgust`		               |
+6.405099	          | `surprise`		             |
+6.029909            | `positive`                 |
+5.833852            | `TextLength`               |
+
+Among those, `TextNumOfQuotation`, `surprise`,and `disgust`	are identified as the most important predictors both in 'Source' forest model and the 'Non-Source' forest model. Therefore, we visualize the relationship between them and the response y(type in this case).
 
 #### TextNumOfQuotation
 
@@ -968,6 +976,10 @@ ggplot(newsData, aes(x = TextNumOfQuotation,fill=type)) +
 ```
 
 real news tend to have large number(0 - 50) of quotations in text, while the number of quotation marks in fake news range from (0 -10) and the most of the fake news have 0 quotations. 
+```{r}
+
+```
+
 
 ####surprise
 
@@ -999,18 +1011,11 @@ MeanIncreaseGini   | Most Important predictors | belongs to 'Source'
   4.8588023	       |  anticipation             |
                    |  a lot of source links    |         *
                               
-                              
-                              
-                              
-                              
-                              
+```{r}
+ggplot(newsData, aes(x = surprise,fill=type)) + 
+  geom_density(alpha=0.5) 
+```
 
-\
-\
-\
-\
-\
-\
 
 
 
