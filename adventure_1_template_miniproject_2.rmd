@@ -276,8 +276,19 @@ However, although there are some mismatches, these variables are still useful, a
 
 ## Part 2: Analyze
 
-We depends on 4 algorithms: Logistic regression, KNN, Tree, Forest.
-We first use all 17 available predictors on these models.
+We consider 4 algorithm: **Logistic regression**, **KNN**, **Tree**, **Forest**.
+The reason we chose these four algorithm are:
+
+Model             |   Pro                         | con
+------------------| ------------------------------|------------------
+`logistic_model`  | binary categorical            |    
+`knn_model`       |   nonparametric, flexible     |computationally expensive
+`tree_model`      |      computationally efficient| greedy, local
+`forest_model`    |     reduce variability        | visualization
+
+
+We first use all 17 available predictors(including `Source`) on these models.
+For cross Validation, we decide to use 5 folds instead of 10 because we only have 182 samples in total, which is already a small sample size, and thus we want to told a more rigorous to our models.
 
 ### Logistic Model
 
@@ -304,12 +315,11 @@ summary(logistic_model)
 
 
 
-CV accuracy:
+We obser be a 0.8157983 CV accuracy, which represents the expected accuracy if we were going to apply our model to a new data set.
 
 ```{r}
 logistic_model$results
 ```
-
 
 ```{r}
 set.seed(253)
@@ -325,7 +335,7 @@ confusionMatrix(data = classifications,
   reference = predict_data$.outcome, 
   positive = "real")
 ```
-
+We observe a high in-sample accuracy of 0.9253, with sensitivity of 0.9121 and specificity of 0.9398. The in-sample accuracy is higher than the CV accuracy by around 0.10, which could be caused by the smal sample size.
 
 
 
@@ -356,12 +366,12 @@ plot(knn_model)
 knn_model$bestTune
 ```
 
-
+It's surprising to find the best tuned k is 1, which means the highest accuracy is achieved by only looking at one nearest neighbor. We suspect this is resulted by the curse of dimensionality. Because we are using all predictors(including predictor such as `Source`), it's likely that it causes a disperse space and every data point is on its own corner. Later when we compare the result of `knn_model_4`, the best tune of 11 confirms this hypothesis.
 
 ```{r}
 mean(knn_model$resample$Accuracy)
 ```
-
+The CV accuracy is surprisingly high.
 
 ```{r}
 set.seed(253)
@@ -377,11 +387,12 @@ confusionMatrix(data = classifications,
   reference = predict_data$.outcome, 
   positive = "real")
 ```
-
+The accuracy of 1 is clearly an overfit, possibly resulted by the curse of dimensionality.
 
 
 ### Classification Tree
 
+We tune the `cp` param basing on the CV plot.
 ```{r}
 set.seed(253)
 # Construct trees
@@ -420,6 +431,7 @@ confusionMatrix(data = classifications,
 ```{r}
 mean(tree_model$resample$Accuracy)
 ```
+Here, we gain a CV accuracy of 0.780719 and in sample accuracy of 0.8103. An interesting distinction is between sensitivity(0.6703) and specificity(0.9639). This model tends to classify real news as fake, but correctly classify fake as fake. Considering the sample size of real and fake are the same, it might because the predictors we use are not great descriptors for real news.
 
 ```{r}
 # Plot the tree
@@ -429,11 +441,14 @@ rpart.plot(tree_model$finalModel)
 # Get metrics of variable importance
 tree_model$finalModel$variable.importance
 ```
-
-
+Looking at the tree, we identify the most important predictors are **`TextNumOfQuotation`**, and a specific real news website **`"politi.co"`**.
 
 
 ### Random Forest
+
+To reduce the variability, we look at the performance of Forest model.
+
+We tune the param `mtry` basing on the **sqrt(43)** which is the total predictors(including categorical variables). 
 
 ```{r}
 set.seed(253)
@@ -453,7 +468,6 @@ forest_model <- train(
 plot(forest_model)
 ```
 
-
 ```{r}
 forest_model$finalModel
 ```
@@ -461,7 +475,6 @@ forest_model$finalModel
 ```{r}
 (71+65)/(71+12+26+65)
 ```
-
 
 
 ```{r}
@@ -473,8 +486,7 @@ forest_model$results
 forest_model$results %>% 
     filter(mtry == forest_model$bestTune$mtry)
 ```
-
-
+We have an in-sample accuracy of 0.7816092 and an OOB accuracy of 0.8045977. 30 predictors were considered during each split. We observe that it's **twice** more likely to classify a real news to fake than a fake news to real.
 
 ```{r}
 variable_importance <- data.frame(importance(forest_model$finalModel)) %>% 
@@ -491,7 +503,7 @@ variable_importance %>%
   head(6)
 ```
   
-  
+Above are the 6 most important and the 6 least important predictors identified by the forest.
 
 
 Model           |   in-sample Accuracy   |  5-fold CV / oob
@@ -501,10 +513,9 @@ Model           |   in-sample Accuracy   |  5-fold CV / oob
 `tree_model`    |      0.8103            |    0.7807
 `forest_model`  |      0.7816            |    0.8046
 
+Among the four models, except for `knn` suffers from the **curse of dimensionality**, `logistic_model` has the highest CV accuracy, and `forest_model` is the second. 
 
-
-
-It's sensible that all articles from CNN website are real news. Therefore, `source` as a predictor is kind of cheating and also becomes a limiation for news that are from unknown sources. Therefore, we delete `source` and run the 4 algorithms again to see how would the prediction result change. 
+It's sensible that all articles from CNN website are real news. Therefore, `source` as a predictor is kind of cheating and also becomes a limiation for news that are from unknown sources. Therefore, we **delete** `source` and run the 4 algorithms again to see how would the performance change. 
 
 
 
