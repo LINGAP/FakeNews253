@@ -997,13 +997,21 @@ MeanIncreaseGini   | Most Important predictors | belongs to 'Source'
   4.5685442	       |  fear		                 |
   4.7367663	       |  TitleNumOfCap		         |
   4.8588023	       |  anticipation             |
-                   |  a lot of source links    |         *
+    NA             |  a lot of source links    |         *
                               
                               
                               
+```{r}
+ggplot(newsData, aes(x = TitleNumOfQue,fill=type)) + 
+  geom_density(alpha=0.5) 
+```                              
                               
-                              
-                              
+
+
+```{r}
+ggplot(newsData, aes(x = TitleNumOfExc　,fill=type)) + 
+  geom_density(alpha=0.5) 
+```                               
 
 \
 \
