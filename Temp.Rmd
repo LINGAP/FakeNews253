@@ -1,0 +1,247 @@
+---
+title: "Temp"
+author: "Kaichong (Matt) Zhang"
+date: "11/14/2019"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(stringr)
+library(dplyr)
+library(janeaustenr)
+library(ngram)
+library(stringr) #for regex
+library(tidyverse)
+library(tidytext)
+library(glue)
+library(ggplot2)
+library(caret)
+library(randomForest)
+library(gridExtra)
+library(rpart)  
+library(infer) 
+RNGversion("3.6.1")
+```
+
+## Part 1: Process the data
+
+### Check the Data
+
+```{r}
+#Input the raw data and fill the blanks with N/A
+raw <- read.csv("https://www.macalester.edu/~ajohns24/data/buzzfeed.csv", header = T, na.strings = c("", " ", NA))
+```
+
+```{r warning=FALSE}
+#Check the relationship between source and whether or not the news is real
+do.call(rbind, lapply(levels(raw$source), FUN = function(x){
+   tt <- subset(raw, source == x)
+   result <- table(tt$type)
+   result$source <- x
+   return (result)
+ }))
+```
+Based on the table above, we can see that around 2/3 of the sources are generaling either real news or fake news, meaning that checking the source of the news is a useful to identify the fake news. However, this variable is quite **CHEATING** in the classification process because news from authoritative media/website are usually real. As a result, we will compare the classifications with and without `source` later. 
+
+```{r warning=FALSE}
+#Check the relationship between author and whether or not the news is real
+do.call(rbind, lapply(levels(raw$authors), FUN = function(x){
+   tt <- subset(raw, authors == x)
+   result <- table(tt$type)
+   result$authors <- x
+   return (result)
+ }))
+```
+Based on the table above, we can see that there are 90 authors and most of them just wrote 1 or 2 news, which means the variable `author` is pretty **unique** among news (most authors just appear once or twice in the whole data set) and is not suitable to serve as a good predictor. In other words, using variable `author` is both **computationally expensive** and **unable to provide sufficiently valuable information**. 
+
+We think that there are many underlying hints in `title` and `text` that indicate whether the news are real. Therefore, most of our predictors will focus on `title` and `text`. 
+
+### Create variables and data set
+
+```{r}
+#Create a variable that count the number of exclamation mark
+TitleNumOfExc <- str_count(raw$title, "!")
+
+#Create a variable that count the number of question mark
+TitleNumOfQue <- str_count(raw$title, "\\?")
+
+#Create a variable that count the number of capitalized words
+TitleNumOfCap <- str_count(raw$title, "\\b[A-Z]{2,}\\b")
+
+#Create a variable that count the number of quotation mark
+TextNumOfQuotation <- str_count(raw$text, "\"")
+
+#Create a variable that count the length of the title
+TitleLength <- str_count(raw$title, "\\W+")
+
+#Create a variable that count the length of text
+TextLength <- str_count(raw$text, "\\W+")
+```
+
+```{r}
+#Add the variables we create into a new data set
+newsTemp <- raw %>% 
+  mutate(TitleNumOfExc) %>% 
+  mutate(TitleNumOfQue) %>% 
+  mutate(TitleNumOfCap) %>% 
+  mutate(TextNumOfQuotation) %>% 
+  mutate(TitleLength) %>% 
+  mutate(TextLength)
+
+#Sentiment dictionary
+temp <- tibble(txt = newsTemp$text) %>% 
+  mutate(txt = as.character(txt))
+
+tokens <- temp %>%
+  mutate(linenumber = row_number()) %>%
+  unnest_tokens(word, txt)
+
+#Get the sentiment from the first text: 
+tokens <- tokens %>%
+  group_by(linenumber) %>%
+  inner_join(get_sentiments("nrc")) %>% # pull out only sentiment words
+  count(sentiment) %>% # count the # of positive & negative words
+  spread(sentiment, n, fill = 0) # %>% # made data wide rather than narrow
+```
+
+```{r}
+#Combine two data frame together
+newsTemp <- cbind(data.frame(newsTemp),data.frame(tokens))
+
+#Add the frequency of sentiment expressions into the data set
+newsTemp <- newsTemp %>% 
+  mutate(anger = anger/TextLength)  %>% 
+  mutate(anticipation = anticipation/TextLength)  %>% 
+  mutate(disgust = disgust/TextLength)  %>% 
+  mutate(fear = fear/TextLength)  %>% 
+  mutate(joy = joy/TextLength) %>% 
+  mutate(negative = negative/TextLength) %>% 
+  mutate(positive = positive/TextLength) %>% 
+  mutate(sadness = sadness/TextLength) %>% 
+  mutate(surprise = surprise/TextLength) %>% 
+  mutate(trust = trust/TextLength)
+```
+
+```{r}
+#create the final dataset `newData` and remove unused variables.
+newsData <- newsTemp %>% 
+  select(-title, -text, -url, -linenumber, -authors)
+```
+We remove `title` and `text` because we have already created 16 variables that analyze different aspects of titles and texts and therefore we don't need to these two predictors anymore. The reasons that we remove `author` have been mentioned above. `url` is almost the same as `source` and therefore it couldn't provide much information for us. `linenumber` is just a temporarily used variable in the sentiment dictionary code, so we need to remove it. 
+
+By the way, we will 
+
+#### Code book
+
+Variable name      | Meaning                                     | 
+-------------------|---------------------------------------------|
+TitleNumOfExc      |The number of exclamation mark in the title  |
+TitleNumOfQue      |The number of question mark in the title     |
+TitleNumOfCap      |The number of capitalized words in the title |
+TextNumOfQuotation |The number of quotation mark in the text     |
+TitleLength        |The length of the title                      |
+TextLength         |The length of the text                       |
+anger              |The frequency of anger expressions           |
+anticipation       |The frequency of anticipation expressions    |
+disgust            |The frequency of disgust expressions         |
+fear               |The frequency of fear expressions            |
+joy                |The frequency of joy expressions             |
+negative           |The frequency of negative expressions        |
+positive           |The frequency of positive expressions        |
+sadness            |The frequency of sadness expressions         |
+surprise           |The frequency of surprise expressions        |
+trust              |The frequency of trust expressions           |
+
+#### Reasons of choosing
+
+`TitleNumOfExc`: the number of exclamation mark is an important indicator because fake news tend to be more emotional or affecting, meaning that there will be more exclamation mark in the titles of fake news.
+
+`TitleNumOfQue`: the number of question mark is an important indicator because fake news tend to be more emotional or affecting, meaning that there will be more question mark in the titles of fake news.
+
+`TitleNumOfCap`: the number of capitalized words is an important indicator because fake news tend to be overemphasize a or some particular points they make, meaning that there will be more capitalized words in the titles of fake news.
+
+`TextNumOfQuotation`: the number of quotation mark is an important indicator because real news tend to be more rigorous and having more quotations so that the content will be more reliable and verfiable, meaning that there will be more quotation mark in the text of fake news.
+
+`TitleLength`: for fake news, the title tends to be longer because fake news tend to have more striking information in the title. 
+
+`TextLength`: for fake news, the text tends to be shorter because there are not many supporting evidence and it is hard for the fake news authors to talk a lot because they are talking about something doesn't exist.
+
+`anger`: fake news tend to be more emotional and therefore it will include more anger words/expression. 
+
+`anticipation`: fake news tend to predict something wrong rather than just state the fact and therefore it will include more anticipation words/expression.  
+
+`disgust`: fake news tend to more emotional and therefore it will include more disgust words/expression.      
+
+`fear`: fake news tend to more emotional and therefore it will include more fear words/expression.   
+
+`joy`: fake news tend to more negative and therefore it will include less joy words/expression. 
+
+`negative`: fake news tend to more negative and therefore it will include more negative words/expression. 
+
+`positive`: fake news tend to more negative and therefore it will include less positive words/expression. 
+
+`sadness`: fake news tend to more emotional and therefore it will include more sad words/expression.            
+
+`surprise`: fake news tend to more astonishing and striking and therefore it will include more surprise words/expression.    
+
+`trust`: fake news tend to more suspicious and therefore it will include less trust words/expression.  
+
+#### Real and fake news comparison
+
+```{r}
+#Set the seed
+set.seed(253)
+
+#Create a real news data set
+realNews <- newsData %>%
+  filter(type == "real")
+
+#Create a fake news data set
+fakeData <- newsData %>%
+  filter(type == "fake")
+
+#Pick a random real news
+realNews[runif(1, min = 1, max = 81), ]
+
+#Pick a random fake news 
+fakeData[runif(1, min = 1, max = 81), ]
+```
+Comparing a random real news with fake news, we can see that the real news has higher number of quotation mark, shorter title length, shorter text length, lower frequency of anger, anticipation, disgust, negative, positive, surprise, and trust expressions, and higher frequency of fear, joy, and sadness expressions Some features match our assumption, for example, higher number of quotation mark and shorter title length, while others like higher frequency of fear and sadness expressions don't. This is **because variables within single news might be biased**.
+
+As a result, we summarize the mean of each variables for real news and fake news.
+
+```{r}
+#Summarize the mean of variables of different predictors of real news and fake news
+newsDatagroup <- newsData %>%
+  group_by(type) %>%
+  summarize(mean(TitleNumOfExc), mean(TitleNumOfQue), mean(TitleNumOfCap),mean(TextNumOfQuotation), mean(TitleLength), mean(TextLength), mean(anger), mean(anticipation), mean(disgust), mean(fear), mean(joy), mean(negative), mean(positive), mean(sadness), mean(surprise), mean(trust))
+newsDatagroup
+```
+Based on the table above, we can see that on average, real news have slightly more exclamation mark and less question mark, capitalized words used in the title; real news tend to have shorter title length and longer text length with much more usage of quotation mark. In terms of sentiment words usage, real news have less  anger, anticipation, disgust, negative, sadness, fear, trust words, but more joy, positive, surprise words. 
+
+Most of the data matches our assumption excep for the numnber of exclamation mark in the title, the frequency of trust and surprise expression.
+
+However, although there are some mismatches, these variables are still useful, at least in **human learning**, in classifying fake news.
+
+### Drawbacks
+
+1. By focusing on each small features of the title or text, we might loss some "**human thinkings**" in the classification process. For example, some news, based on our classification predictors, look like fake news but they are actully real because the underlying information is so striking that the authors need exclamation mark to express this emotion. 
+
+2. Some sentiments we refer to might be overlapping with one another, meaning that the importance of these variables might be **overemphasized**. For example, sad words and negative words might be overlapping, so as joy words and positive words.
+
+3. The amount of data is not big enough so that there might be some **variations** in the data that lead to the **unmatches** of our assumption with the data. Also, the low amount of data wil also lead to  less accurate classification result.
+
+4. Our predictors can only focus on some **particular features** of titles and texts, meaning that we can't check the authenticity based on the more sophisticated **big picture** like themes and purposes of the news.
+
+
+
+
+

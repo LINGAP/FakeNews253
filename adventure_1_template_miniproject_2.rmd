@@ -792,7 +792,7 @@ We tried to have less variables in our logistic and knn models by variable selec
 
 6 most important Identifed by Forest with `Source`
 
-MeanDecreaseGini    | Most Important predictors  |  belongs to Source'
+MeanDecreaseGini    | Most Important predictors  |  belongs to `Source`
 --------------------|----------------------------|-----------------------
 20.344026           |	`TextNumOfQuotation`		   |
 12.490735	          | `sourcehttp://politi.co`	 |    `*`
@@ -816,8 +816,7 @@ Among those, `TextNumOfQuotation`, `surprise`,and `disgust`	are identified as th
 
 Also, because we don't want to **cheat** and fake news identification is mainly based on title and text, we believe the variables from the "non-source" Froest are the relatively more important variables.
 
-Therefore, we visualize the relationship between the four most important variables (`TextNumOfQuotation`, `TitleLength`, `disgust`, and `surprise`) and the outcome variable y(type in this case).
-
+Therefore, we will visualize the relationship between the four most important variables (`TextNumOfQuotation`, `TitleLength`, `disgust`, and `surprise`) and the outcome variable y(type in this case).
 
 To better evaluate the ranking information and understand the relationship between features, we draw a heatmap showing the correlation between the variables:
 
